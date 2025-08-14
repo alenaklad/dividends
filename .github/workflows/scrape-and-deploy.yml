@@ -1,0 +1,53 @@
+name: Scrape & Deploy (hourly)
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install scraper deps
+        working-directory: scripts
+        run: |
+          npm i -g pnpm@9
+          pnpm install
+
+      - name: Run scraper
+        run: node scripts/scrape.mjs
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_BASE: /dividends/
+        run: pnpm build
+
+      - name: Copy data to dist
+        run: |
+          mkdir -p frontend/dist/data
+          cp -f data/dividends.json frontend/dist/data/dividends.json
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
